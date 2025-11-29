@@ -53,6 +53,7 @@ async function generateImage(text) {
         return img && img.naturalWidth > 1 && ch !== ' ' && ch !== '\n' && ch !== '\r';
     });
     const baseWidth = nonSpaceImages.length ? (nonSpaceImages.reduce((s, img) => s + img.naturalWidth, 0) / nonSpaceImages.length) : images[0]?.naturalWidth || 1;
+    const minWidthFactor = 0.6;
 
     const lines = [];
     let curLine = [];
@@ -88,7 +89,8 @@ async function generateImage(text) {
                     }
                     if (maxX >= minX) visibleWidthPx = (maxX - minX + 1);
                 }
-                const widthFactor = imgEl ? (visibleWidthPx / baseWidth) : 1;
+                const rawFactor = imgEl ? (visibleWidthPx / baseWidth) : 1;
+                const widthFactor = imgEl ? Math.max(minWidthFactor, rawFactor) : 1;
                 imgs.push({ char: ' ', img: imgEl, widthFactor });
                 imgIdx++;
             }
@@ -114,7 +116,8 @@ async function generateImage(text) {
                     }
                     if (maxX >= minX) visibleWidthPx = (maxX - minX + 1);
                 }
-                const widthFactor = imgEl ? (visibleWidthPx / baseWidth) : 1;
+                const rawFactor = imgEl ? (visibleWidthPx / baseWidth) : 1;
+                const widthFactor = imgEl ? Math.max(minWidthFactor, rawFactor) : 1;
                 imgs.push({ char: c, img: imgEl, widthFactor });
                 imgIdx++;
             }
@@ -190,21 +193,37 @@ async function generateImage(text) {
         return true;
     }
 
-    let foundScale = false;
-    for (let s = 1; s >= minScale; s -= 0.01) {
-        if (testScaleFromTokenImages(s)) {
-            scale = Math.max(minScale, Math.min(1, s));
-            scaledSize = imageSize * scale;
-            lineHeight = scaledSize * 1.2;
-            foundScale = true;
-            break;
+    const maxScale = 4;
+    // compute longest line at scale=1
+    const longestLineWidthAt1 = lines.reduce((maxW, lineTokens) => {
+        const lw = (lineTokens || []).reduce((sum, token) => {
+            const tokenImgs = Array.isArray(token.images) ? token.images : [];
+            if (tokenImgs.length > 0) return sum + tokenImgs.reduce((s, im) => s + (im.widthFactor || 1), 0) * imageSize;
+            const charsLen = (token.chars && token.chars.length) || (token.type === 'space' && token.images ? token.images.length : (token.length || 1));
+            return sum + (charsLen || 1) * imageSize;
+        }, 0);
+        return Math.max(maxW, lw);
+    }, 0) || imageSize;
+    let scaleCandidate = Math.min(maxScale, Math.max(minScale, maxWidth / Math.max(1, longestLineWidthAt1)));
+
+    function findMaxScale(low, high) {
+        let lo = low; let hi = high; let best = low;
+        while (hi - lo > 0.001) {
+            const mid = (lo + hi) / 2;
+            if (testScaleFromTokenImages(mid)) { best = mid; lo = mid; }
+            else hi = mid;
         }
+        return Math.max(minScale, Math.min(maxScale, best));
     }
-    if (!foundScale) {
-        scale = minScale;
-        scaledSize = imageSize * scale;
-        lineHeight = scaledSize * 1.2;
+
+    if (testScaleFromTokenImages(scaleCandidate)) {
+        scale = scaleCandidate;
+    } else {
+        scale = findMaxScale(minScale, scaleCandidate);
     }
+    scaledSize = imageSize * scale;
+    lineHeight = scaledSize * 1.2;
+    
 
     const finalLines = [];
     let curL = [];
@@ -267,13 +286,20 @@ async function generateImage(text) {
                 return sum + (charsLen || 1) * scaledSize;
             }, 0);
 
-            let xCursor = Math.max(0, Math.floor((maxWidth - lineWidth) / 2));
+            const totalSpaceSlots = lineTokens.reduce((sum, token) => {
+                if (token.type === 'space' && Array.isArray(token.images)) return sum + token.images.length;
+                return sum;
+            }, 0);
+            const extraPerSpace = totalSpaceSlots > 0 ? Math.max(0, (maxWidth - lineWidth) / totalSpaceSlots) : 0;
+            let xCursor = Math.round((maxWidth - (lineWidth + totalSpaceSlots * extraPerSpace)) / 2);
             const y = Math.round(offsetY + li * lineHeight);
+            
 
             for (let wi = 0; wi < lineTokens.length; wi++) {
                 const w = lineTokens[wi];
                 if (!w) continue;
                 const imagesArr = Array.isArray(w.images) ? w.images : [];
+                const isSpace = w.type === 'space';
                 if (imagesArr.length > 0) {
                     for (let ci = 0; ci < imagesArr.length; ci++) {
                         const imgObj = imagesArr[ci];
@@ -281,11 +307,14 @@ async function generateImage(text) {
                         const drawW = scaledSize * wFactor;
                         if (imgObj && imgObj.img) ctx.drawImage(imgObj.img, xCursor, y, drawW, scaledSize);
                         xCursor += drawW;
+                        if (isSpace) xCursor += extraPerSpace;
                     }
                 } else {
                     const charsLen = (w.chars && w.chars.length) || (w.type === 'space' && w.images ? w.images.length : (w.length || 1));
                     xCursor += (charsLen || 1) * scaledSize;
+                    if (isSpace) xCursor += extraPerSpace * (charsLen || 1);
                 }
+            
             }
         }
         if (canvasWrapper) canvasWrapper.classList.remove('d-none');
