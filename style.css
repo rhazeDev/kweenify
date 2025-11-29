@@ -168,6 +168,71 @@ body {
     box-shadow: none
 }
 
+.fullscreen-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(3, 6, 15, 0.9);
+    z-index: 1200;
+}
+
+.fullscreen-content {
+    position: relative;
+    max-width: calc(100% - 80px);
+    max-height: calc(100% - 80px);
+    padding: 20px;
+}
+
+.fullscreen-content canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.fullscreen-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--muted);
+}
+
+.fullscreen-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.fullscreen-download {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(6, 32, 34, 0.45);
+}
+
+.fullscreen-download:hover {
+    transform: translateY(-2px);
+}
+
 .form-control:focus,
 textarea.form-control:focus {
     background-color: transparent !important;
@@ -236,12 +301,32 @@ h1 {
     margin: 0 auto;
 }
 
+.canvas-container {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.canvas-container::-webkit-scrollbar {
+    display: none;
+    height: 0;
+    width: 0;
+}
+
+.canvas-container.rendering {
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
 .footer-spacer {
     height: 80px;
 }
 
 .small-muted {
     color: rgba(255, 255, 255, 0.5);
+}
+
+#loadingText {
+    white-space: pre-wrap;
 }
 
 .topbar .small-muted a,
@@ -270,4 +355,38 @@ h1 {
 
 .main {
     padding-top: var(--nav-height);
+}
+
+.site-footer {
+    color: var(--muted);
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.02);
+    position: relative;
+    z-index: 5;
+}
+
+@media (max-width: 767px) {
+    .fullscreen-modal {
+        align-items: stretch;
+    }
+
+    .fullscreen-content {
+        max-width: 100%;
+        max-height: 100%;
+        width: 100%;
+        height: 100%;
+        padding: 8px;
+    }
+
+    .fullscreen-content canvas {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain;
+        border-radius: 0;
+    }
+
+    .fullscreen-close,
+    .fullscreen-download {
+        z-index: 2000;
+    }
 }
